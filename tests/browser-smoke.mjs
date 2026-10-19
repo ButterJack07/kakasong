@@ -6,7 +6,7 @@ const server = process.env.TEST_URL ? null : await createServer({ server: { host
 await server?.listen();
 const browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || 'msedge', headless: true });
 try {
-  for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844 }, { width: 320, height: 740 }]) {
+  for (const viewport of [{ width: 1440, height: 1000 }, { width: 430, height: 932 }, { width: 390, height: 844 }, { width: 375, height: 667 }, { width: 320, height: 568 }]) {
     const context = await browser.newContext({ viewport, isMobile: viewport.width < 760, hasTouch: viewport.width < 760 });
     const page = await context.newPage();
     const errors = [];
@@ -21,6 +21,10 @@ try {
     }
     assert.ok(await page.locator('.legal-cell').count(), `initial placement is available at ${viewport.width}px; errors: ${errors.join('; ')}`);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no horizontal page overflow');
+    if (viewport.width < 760) {
+      assert.equal(await page.evaluate(() => document.documentElement.scrollHeight), viewport.height, `no vertical document scroll at ${viewport.width}×${viewport.height}`);
+      assert.equal(await page.evaluate(() => getComputedStyle(document.body).overflow), 'hidden');
+    }
     await page.locator('#rotate').click();
     if (!await page.locator('.legal-cell').count()) {
       for (let r = 0; r < 3 && !await page.locator('.legal-cell').count(); r++) await page.locator('#rotate').click();
@@ -42,6 +46,12 @@ try {
     await page.locator('#help').click();
     await page.getByRole('dialog').waitFor();
     await page.locator('.modal-close').click();
+    if (viewport.width < 760) {
+      await page.locator('#goals').click();
+      await page.getByRole('dialog').waitFor();
+      assert.match(await page.locator('.modal').innerText(), /原野小愿望/);
+      await page.locator('.modal-close').click();
+    }
     await page.locator('#zoom-out').click();
     await page.locator('#recenter').click();
     // Exercise real pointer dragging on the board.

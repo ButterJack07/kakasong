@@ -39,6 +39,7 @@ document.querySelector('#app').innerHTML = `
     <div class="header-caption"><span class="online-dot"></span> 一个人，也有一整个世界</div>
     <nav class="header-actions" aria-label="游戏工具">
       <button class="icon-button" id="sound" title="开启音效" aria-label="开启音效"></button>
+      <button class="icon-button mobile-goals" id="goals" title="目标与手记" aria-label="目标与手记">${icon('target')}</button>
       <button class="icon-button" id="help" title="玩法说明" aria-label="玩法说明">${icon('help')}</button>
       <span class="nav-divider"></span>
       <button class="new-game" id="new-game">${icon('reset')}<span>新旅程</span></button>
@@ -301,6 +302,7 @@ $('#zoom-out').addEventListener('click', () => zoomBy(1 / 1.2));
 $('#recenter').addEventListener('click', () => recenter());
 $('#sound').addEventListener('click', () => { muted = !muted; safeSet('little-lands-sound', muted ? 'off' : 'on'); updateSound(); sound('select'); });
 $('#help').addEventListener('click', () => openModal('help'));
+$('#goals').addEventListener('click', () => openModal('notes'));
 $('#new-game').addEventListener('click', () => openModal('restart'));
 window.addEventListener('keydown', event => {
   if (modal) { if (event.key === 'Escape') closeModal(); return; }
@@ -319,7 +321,16 @@ function openModal(type) {
   modal = type;
   const won = game.score >= TARGET_SCORE && game.completed >= TARGET_COMPLETED;
   let content = '';
-  if (type === 'help') content = `
+  if (type === 'notes') content = `
+    <span class="eyebrow">FIELD NOTES</span><h2>原野小愿望</h2>
+    <div class="objective ${game.score >= TARGET_SCORE ? 'done' : ''}"><div class="objective-icon">${icon(game.score >= TARGET_SCORE ? 'check' : 'leaf')}</div><div class="objective-info"><div><strong>让原野生机盎然</strong><span>${game.score}<em> / ${TARGET_SCORE} 分</em></span></div><div class="progress"><i style="width:${Math.min(100, game.score / TARGET_SCORE * 100)}%"></i></div></div></div>
+    <div class="objective ${game.completed >= TARGET_COMPLETED ? 'done' : ''}"><div class="objective-icon">${icon(game.completed >= TARGET_COMPLETED ? 'check' : 'city')}</div><div class="objective-info"><div><strong>为旅人建一个家</strong><span>${game.completed}<em> / ${TARGET_COMPLETED} 处</em></span></div><div class="progress"><i style="width:${Math.min(100, game.completed / TARGET_COMPLETED * 100)}%"></i></div></div></div>
+    <p class="objective-footnote">完成并计分的道路、城镇和修道院均计入。</p>
+    <div class="journal modal-journal"><div class="journal-title"><span>原野手记</span><span>FIELD NOTES</span></div>${game.history.length
+      ? `<div class="journal-entries">${game.history.slice(-5).reverse().map(r => `<div class="journal-entry">${icon(r.type)}<span>${labels[r.type]}${r.complete ? '完工，旅人归来' : '获得旅程结算'}</span><strong>+${r.points}</strong></div>`).join('')}</div>`
+      : '<p>第一条小路，会通向哪里？</p>'}</div>
+    <button class="primary-button modal-confirm" data-close>继续旅程 ${icon('arrow')}</button>`;
+  else if (type === 'help') content = `
     <span class="eyebrow">A SMALL GUIDE</span><h2>欢迎来到田园之间</h2><p class="modal-lead">36 块土地，5 位旅人，一段属于自己的旅程。</p>
     <div class="help-step"><span>01</span><div><h3>选择、旋转、拼接</h3><p>从三块候选中选择一块，点击地图上的虚线格放置。相邻边的道路、城镇或草地必须一致。可拖动地图、缩放查看。</p></div></div>
     <div class="help-step"><span>02</span><div><h3>派出你的旅人</h3><p>放置后，可派 1 位旅人到该板块上的建筑。连通区域已有旅人时不能再次派遣；草地不计分。确认回合前可撤回板块。</p></div></div>
