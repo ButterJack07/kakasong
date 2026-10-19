@@ -55,7 +55,8 @@ document.querySelector('#app').innerHTML = `
         <div class="board-viewport" id="viewport" role="region" aria-label="可拖动和缩放的游戏地图">
           <div id="world" class="world"></div>
         </div>
-        <div class="board-tip" id="board-tip"></div>
+        <div class="board-tip" id="board-tip" aria-live="polite"></div>
+        <div class="placement-hint" id="placement-hint" aria-live="polite"></div>
         <div class="map-controls"><button class="map-button" id="zoom-out" aria-label="缩小">${icon('minus')}</button><span id="zoom-label">100%</span><button class="map-button" id="zoom-in" aria-label="放大">${icon('plus')}</button><span class="control-divider"></span><button class="map-button" id="recenter" aria-label="居中地图" title="居中地图">${icon('target')}</button></div>
         <div class="map-signature">a little land, a little peace.</div>
       </div>
@@ -86,8 +87,10 @@ function render() {
   $('#map-count').textContent = `${Object.keys(game.board).length} 块土地 · 第 ${Math.min(game.placed + 1, TOTAL_TILES)} 回合`;
   const blocked = game.phase === 'place' && !hasAnyMove(game);
   $('#board-tip').innerHTML = game.finished ? `${icon('leaf')} 这一片原野，留下了你的故事` : game.phase === 'claim'
-    ? `${icon('check')} 板块已放置 · ${points ? `本回合可得 ${points} 分` : '派遣旅人，或直接结束回合'}`
-    : blocked ? `${icon('swap')} 暂无可用落点，试试换一块` : `${icon('plus')} 点击虚线位置，种下一片风景`;
+    ? `${icon('check')} 已放置${points ? ` · 可得 ${points} 分` : ' · 选择旅人去向'}`
+    : blocked ? `${icon('swap')} 暂无合适落点，试试换牌` : `${icon('plus')} 点击虚线位置，种下一片风景`;
+  $('#placement-hint').textContent = '';
+  $('.workspace').classList.toggle('claiming', game.phase === 'claim');
   $('#hand-section').innerHTML = `
     <div class="section-title"><span class="step-number">${game.phase === 'claim' ? '02' : '01'}</span><h2>${game.finished ? '旅程已完成' : game.phase === 'claim' ? '让旅人出发' : '选择一块风景'}</h2><span class="section-tag">${game.phase === 'claim' ? '可选' : '三选一'}</span></div>
     <p class="section-subtitle">${game.finished ? '每一块土地，都成为了故事。' : game.phase === 'claim' ? '占领建筑，完工后得分并收回旅人。' : '道路接道路，城镇接城镇，草地接草地。'}</p>
@@ -130,10 +133,12 @@ function renderClaim() {
 
 function renderBoard() {
   let html = '';
+  const touchPreview = matchMedia('(pointer: coarse)').matches && game.phase === 'place' && game.hand[selected];
+  if (touchPreview) html += '<div class="touch-preview" id="touch-preview" aria-hidden="true"></div>';
   if (game.phase === 'place' && game.hand[selected]) {
     const tile = createTile(game.hand[selected].id, rotation);
     for (const { x, y } of legalPositions(game.board, tile)) {
-      html += `<button class="legal-cell" data-x="${x}" data-y="${y}" style="left:${x * CELL}px;top:${y * CELL}px" aria-label="放置在坐标 ${x},${y}"><span class="legal-plus">+</span><span class="hover-tile">${tileArt(tile, { ghost: true })}</span></button>`;
+      html += `<button class="legal-cell ${x === 0 && y === 0 ? 'preview-anchor' : ''}" data-x="${x}" data-y="${y}" style="left:${x * CELL}px;top:${y * CELL}px" aria-label="放置在坐标 ${x},${y}" title="点击放置"><span class="legal-plus">+</span><span class="hover-tile">${tileArt(tile, { ghost: true })}</span></button>`;
     }
   }
   for (const tile of Object.values(game.board)) {
@@ -147,13 +152,33 @@ function renderBoard() {
   updateCamera();
   world.querySelectorAll('.legal-cell').forEach(button => {
     button.addEventListener('click', () => {
+      if (button.classList.contains('preview-anchor') && $('#touch-preview')?.classList.contains('preview-visible')) return;
       if (suppressClick) return;
-      if (placeTile(game, selected, rotation, Number(button.dataset.x), Number(button.dataset.y))) {
-        sound('place'); render();
-        if (window.innerWidth < 760) ensurePendingVisible();
-      }
+      commitPlacement(Number(button.dataset.x), Number(button.dataset.y));
     });
   });
+  if (touchPreview) {
+    const preview = $('#touch-preview');
+    preview.innerHTML = `${tileArt(createTile(game.hand[selected].id, rotation), { ghost: true })}<span class="preview-label">可放置</span>`;
+    preview.hidden = true;
+    preview.style.position = 'absolute';
+    preview.style.left = '0'; preview.style.top = '0';
+    preview.style.width = `${CELL}px`; preview.style.height = `${CELL}px`;
+    preview.addEventListener('pointerdown', event => event.stopPropagation());
+    preview.addEventListener('click', () => {
+      if (suppressClick || preview.hidden) return;
+      const x = Number(preview.dataset.x), y = Number(preview.dataset.y);
+      commitPlacement(x, y);
+    });
+  }
+  const activePointer = pointers.values().next().value;
+  if (touchPreview && activePointer) updateTouchPreview(activePointer.x, activePointer.y);
+}
+
+function commitPlacement(x, y) {
+  if (!placeTile(game, selected, rotation, x, y)) return;
+  sound('place'); render();
+  if (window.innerWidth < 760) ensurePendingVisible();
 }
 
 function bindPanel() {
@@ -272,6 +297,7 @@ viewport.addEventListener('pointermove', event => {
   const next = pointerMetrics();
   const dx = next.x - old.x, dy = next.y - old.y;
   if (!suppressClick && Math.hypot(dx, dy) < 3 && pointers.size === 1) return;
+  updateTouchPreview(next.x, next.y);
   suppressClick = true;
   if (!viewport.hasPointerCapture(event.pointerId)) viewport.setPointerCapture(event.pointerId);
   camera.x += dx; camera.y += dy;
@@ -282,6 +308,49 @@ viewport.addEventListener('pointermove', event => {
   gesture = next;
   viewport.classList.add('dragging');
 });
+viewport.addEventListener('pointermove', event => {
+  if (pointers.has(event.pointerId)) return;
+  updateTouchPreview(event.clientX, event.clientY);
+});
+viewport.addEventListener('pointerleave', () => {
+  if (pointers.size) return;
+  const preview = $('#touch-preview');
+  if (preview) preview.hidden = true;
+});
+function updateTouchPreview(clientX, clientY) {
+  const preview = $('#touch-preview');
+  if (!preview || game.phase !== 'place' || !game.hand[selected]) return;
+  const rect = viewport.getBoundingClientRect();
+  const x = Math.floor((clientX - rect.left - rect.width / 2 - camera.x) / camera.zoom / CELL);
+  const y = Math.floor((clientY - rect.top - rect.height / 2 - camera.y) / camera.zoom / CELL);
+  const legal = legalPositions(game.board, createTile(game.hand[selected].id, rotation));
+  const position = legal.find(p => p.x === x && p.y === y);
+  if (!position) {
+    preview.hidden = true;
+    preview.classList.remove('preview-visible');
+    $('#placement-hint').classList.remove('invalid-placement');
+    if (Object.hasOwn(game.board, key(x, y))) {
+      $('#placement-hint').textContent = '这格已有板块';
+      $('#placement-hint').classList.add('invalid-placement');
+    } else if (legal.length && isAdjacent(game.board, x, y)) {
+      $('#placement-hint').textContent = '地形边缘不匹配，旋转板块试试';
+      $('#placement-hint').classList.add('invalid-placement');
+    } else $('#placement-hint').textContent = '';
+    return;
+  }
+  preview.style.left = `${position.x * CELL}px`;
+  preview.style.top = `${position.y * CELL}px`;
+  preview.dataset.x = String(position.x);
+  preview.dataset.y = String(position.y);
+  preview.style.zIndex = '4';
+  preview.hidden = false;
+  preview.classList.add('preview-visible');
+  $('#placement-hint').textContent = '松开手指放置';
+  $('#placement-hint').classList.remove('invalid-placement');
+}
+function isAdjacent(board, x, y) {
+  return [[0, -1], [1, 0], [0, 1], [-1, 0]].some(([dx, dy]) => Object.hasOwn(board, key(x + dx, y + dy)));
+}
 function releasePointer(event) {
   pointers.delete(event.pointerId);
   if (pointers.size) gesture = pointerMetrics();

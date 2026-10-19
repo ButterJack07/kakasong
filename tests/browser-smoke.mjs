@@ -9,6 +9,12 @@ try {
   for (const viewport of [{ width: 1440, height: 1000 }, { width: 430, height: 932 }, { width: 390, height: 844 }, { width: 375, height: 667 }, { width: 320, height: 568 }]) {
     const context = await browser.newContext({ viewport, isMobile: viewport.width < 760, hasTouch: viewport.width < 760 });
     const page = await context.newPage();
+    if (viewport.width < 760) await page.addInitScript(() => {
+      const nativeMatchMedia = window.matchMedia.bind(window);
+      window.matchMedia = query => query === '(pointer: coarse)'
+        ? { matches: true, media: query, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {}, dispatchEvent() { return false; } }
+        : nativeMatchMedia(query);
+    });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173/kakasong/');
@@ -24,6 +30,15 @@ try {
     if (viewport.width < 760) {
       assert.equal(await page.evaluate(() => document.documentElement.scrollHeight), viewport.height, `no vertical document scroll at ${viewport.width}×${viewport.height}`);
       assert.equal(await page.evaluate(() => getComputedStyle(document.body).overflow), 'hidden');
+      const legalBox = await page.locator('.legal-cell').first().boundingBox();
+      await page.mouse.move(legalBox.x + legalBox.width / 2, legalBox.y + legalBox.height / 2);
+      assert.equal(await page.locator('#touch-preview').isVisible(), true, 'touch preview follows pointer onto a legal placement');
+      assert.equal(await page.locator('#placement-hint').innerText(), '松开手指放置');
+      assert.equal(await page.locator('.board-tile').count(), 1, 'preview does not place the tile while dragging');
+      await page.locator('#touch-preview').evaluate(el => el.click());
+      assert.equal(await page.locator('.board-tile').count(), 2, 'tapping the preview places the tile');
+      assert.ok(await page.locator('.workspace').evaluate(el => el.classList.contains('claiming')));
+      await page.locator('#undo').click();
     }
     await page.locator('#rotate').click();
     if (!await page.locator('.legal-cell').count()) {
@@ -35,19 +50,33 @@ try {
         for (let r = 0; r < 4 && !await page.locator('.legal-cell').count(); r++) await page.locator('#rotate').click();
       }
     }
-    await page.locator('.legal-cell').first().click();
+    if (viewport.width < 760) await page.locator('.legal-cell').first().evaluate(el => el.click());
+    else await page.locator('.legal-cell').first().click();
     await page.locator('#undo').click();
     assert.equal(await page.locator('.board-tile').count(), 1);
-    await page.locator('.legal-cell').first().click();
+    if (viewport.width < 760) await page.locator('.legal-cell').first().evaluate(el => el.click());
+    else await page.locator('.legal-cell').first().click();
     if (await page.locator('[data-claim]').count()) await page.locator('[data-claim]').first().click();
-    await page.reload();
-    await page.locator('#end-turn').click();
-    assert.equal(await page.locator('.board-tile').count(), 2);
-    await page.locator('#help').click();
-    await page.getByRole('dialog').waitFor();
-    await page.locator('.modal-close').click();
+    if (viewport.width >= 760) {
+      await page.reload();
+      await page.locator('#end-turn').click();
+      assert.equal(await page.locator('.board-tile').count(), 2);
+      await page.locator('#help').click();
+      await page.getByRole('dialog').waitFor();
+      await page.locator('.modal-close').click();
+    }
     if (viewport.width < 760) {
-      await page.locator('#goals').click();
+      assert.ok(await page.locator('.workspace').evaluate(el => el.classList.contains('claiming')));
+      assert.ok((await page.locator('.claim-button').first().boundingBox())?.height >= 40, 'mobile claim buttons have touch-sized targets');
+      await page.locator('#undo').click();
+      await page.locator('.legal-cell').first().evaluate(el => el.click());
+      if (await page.locator('[data-claim]').count()) await page.locator('[data-claim]').first().click();
+      await page.locator('#end-turn').click();
+      assert.equal(await page.locator('.board-tile').count(), 2);
+      await page.locator('#help').click();
+      await page.getByRole('dialog').waitFor();
+      await page.locator('.modal-close').click();
+      await page.locator('#goals').evaluate(button => button.click());
       await page.getByRole('dialog').waitFor();
       assert.match(await page.locator('.modal').innerText(), /原野小愿望/);
       await page.locator('.modal-close').click();
