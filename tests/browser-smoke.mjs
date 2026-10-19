@@ -11,8 +11,15 @@ try {
     const page = await context.newPage();
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173');
-    await page.locator('.legal-cell').first().waitFor();
+    await page.goto(process.env.TEST_URL || 'http://127.0.0.1:5173/kakasong/');
+    await page.locator('#world').waitFor({ state: 'attached' });
+    if (!await page.locator('.legal-cell').count()) {
+      for (let h = 0; h < 3 && !await page.locator('.legal-cell').count(); h++) {
+        await page.locator(`[data-hand="${h}"]`).click();
+        for (let r = 0; r < 4 && !await page.locator('.legal-cell').count(); r++) await page.locator('#rotate').click();
+      }
+    }
+    assert.ok(await page.locator('.legal-cell').count(), `initial placement is available at ${viewport.width}px; errors: ${errors.join('; ')}`);
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), 'no horizontal page overflow');
     await page.locator('#rotate').click();
     if (!await page.locator('.legal-cell').count()) {

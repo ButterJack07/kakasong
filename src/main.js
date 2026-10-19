@@ -311,7 +311,8 @@ window.addEventListener('keydown', event => {
     selected = Number(event.key) - 1; rotation = 0; render();
   }
 });
-new ResizeObserver(() => updateCamera()).observe(viewport);
+const resizeObserver = new ResizeObserver(() => updateCamera());
+resizeObserver.observe(viewport);
 
 let previousFocus;
 function openModal(type) {
@@ -351,4 +352,7 @@ function openModal(type) {
 function closeModal() { modal = null; $('#modal-root').innerHTML = ''; previousFocus?.focus(); }
 
 render();
-requestAnimationFrame(() => recenter());
+requestAnimationFrame(() => {
+  if (Object.keys(game.board).length > 1) recenter();
+  else { camera = { x: 0, y: 0, zoom: 1 }; updateCamera(); }
+});
