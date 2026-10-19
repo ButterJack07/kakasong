@@ -21,7 +21,7 @@ npm run preview  # 预览生产构建
 
 浏览器回归检查：`npm run test:browser`，默认使用本机 Microsoft Edge，覆盖桌面、390px 和 320px 手机视口的放置、撤回、派遣、刷新恢复、回合结算、地图拖动及缩放。其他环境可先运行 `npx playwright install chromium`，再设置环境变量 `BROWSER_CHANNEL=chromium` 运行此检查。
 
-推送到 `main` 后，GitHub Actions 会自动运行规则测试、构建静态页面，并将编译好的网页发布到 `gh-pages` 分支。仓库 **Settings → Pages → Build and deployment** 的来源选 `Deploy from a branch`，分支选 `gh-pages`、目录选 `/(root)`；保存后 Pages 即可提供网页。部署完成后，手机直接打开 `https://butterjack07.github.io/kakasong/` 即可玩，不需要应用服务器。`dist/` 也可以部署到 Cloudflare Pages、Netlify 等任意静态网站服务。项目使用相对资源路径，支持部署到子目录。
+推送到 `main` 后，GitHub Actions 会自动运行规则测试、构建并发布静态网页。仓库 **Settings → Pages → Build and deployment** 的来源选择 **GitHub Actions**。部署完成后，手机直接打开 `https://butterjack07.github.io/kakasong/` 即可玩，不需要应用服务器。项目入口也兼容 GitHub Pages 的直接静态文件托管；`dist/` 可以部署到 Cloudflare Pages、Netlify 等任意静态网站服务。
 
 ## 玩法
 

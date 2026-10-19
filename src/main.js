@@ -1,4 +1,3 @@
-import './style.css';
 import {
   createGame, createTile, legalPositions, placeTile, undoPlacement, chooseClaim,
   endTurn, claimOptions, exchangeTile, finishEarly, hasAnyMove, completionPreview,
